@@ -1,62 +1,38 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously, onAuthStateChanged, Auth } from "firebase/auth"; // Import Auth type and onAuthStateChanged
-import { getFirestore, doc, setDoc, onSnapshot, Firestore } from "firebase/firestore"; // Import Firestore type
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
-// Declare html2canvas on the Window object for TypeScript
-declare global {
-  interface Window {
-    html2canvas: any; // html2canvas is loaded dynamically, so 'any' is practical here
-  }
-}
-
-// Define interface for stampedBooths (only for tracking boolean status)
-interface StampedBooths {
-  [key: string]: boolean | undefined; // Allow string keys, and their values can be boolean or undefined
-}
-
-// Define interface for customStampImages (which hold URLs, not booleans)
-interface CustomStampImageMap {
-  [key: string]: string | undefined; // Keys are booth IDs, values are string URLs
-  nadia: string;
-  hiredScore: string;
-  serviceNow: string;
-  workday: string;
-  yearEndChatbot: string;
-  copilotM365: string;
-  analystAgent: string;
-  researchAgent: string;
-  deloitteBooth: string;
-  digitalPassportCreation: string;
-}
+// Ensure Tailwind CSS is available in the environment for styling.
+// No direct import needed if it's set up globally.
 
 const App = () => {
-  // Firebase state variables with explicit types
-  const [db, setDb] = useState<Firestore | null>(null);
-  const [auth, setAuth] = useState<Auth | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  // Firebase state variables
+  const [db, setDb] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [userId, setUserId] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Start as true, corrected from 'true' to 'useState(true)'
   const [message, setMessage] = useState("");
-  const [isPassportDataLoaded, setIsPassportDataLoaded] = useState(false);
-  const [html2canvasLoaded, setHtml2canvasLoaded] = useState(false);
+  const [isPassportDataLoaded, setIsPassportDataLoaded] = useState(false); // New state for passport data load
+  const [html2canvasLoaded, setHtml2canvasLoaded] = useState(false); // State to track html2canvas loading
 
   // Passport state variables
   const [userName, setUserName] = useState("");
   const [userRole, setUserRole] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState("");
-  const [favoriteSessions, setFavoriteSessions] = useState<string[]>([]); // Explicitly string array
-  const [stampedBooths, setStampedBooths] = useState<StampedBooths>({}); // Use StampedBooths interface
+  const [selectedAvatar, setSelectedAvatar] = useState(""); // Corrected: Use useState for initial value
+  const [favoriteSessions, setFavoriteSessions] = useState([]);
+  const [stampedBooths, setStampedBooths] = useState({}); // Corrected: Use useState for initial value
   // New state variables for free text fields
   const [favoriteGenAITool, setFavoriteGenAITool] = useState("");
   const [keyInsights, setKeyInsights] = useState("");
 
   // Ref for the passport display section to capture it as an image
-  const passportRef = useRef<HTMLDivElement>(null); // Explicitly type useRef
+  const passportRef = useRef(null);
 
   // Static passport details
   const passportIssuedDate = "June 19, 2025";
-  const passportPlace = "AImplify III workshop, Zurich";
+  const passportPlace = "AImplify III workshop, Zurich"; // Corrected place
   const passportValidUntil = "Till you continue to use Copilot and AI";
 
   // Novartis Brand Colors
@@ -65,9 +41,9 @@ const App = () => {
     mediumBlue: "#0460A9",
     redAccent: "#FF585D",
     yellowAccent: "#FFC100",
-    lightBlueBg: "#E0F2F7",
-    lightRedBg: "#FFF2F2",
-    greenStamp: "#4CAF50",
+    lightBlueBg: "#E0F2F7", // A lighter shade derived from the blues for backgrounds
+    lightRedBg: "#FFF2F2", // A very light red for backgrounds
+    greenStamp: "#4CAF50", // Keeping a clear green for stamp success - still used for the checkmark overlay
     greenStampLight: "#E8F5E9",
   };
 
@@ -77,38 +53,37 @@ const App = () => {
   const avatarImages = Array.from(
     { length: 35 },
     (_, i) => `${baseRepoUrl}avatar_${i + 1}.png`
-  );
+  ); // Adjusted to 35 avatars
 
   // --- Stamp image URLs ---
-  // Now correctly typed as CustomStampImageMap, containing string URLs
-  const customStampImages: CustomStampImageMap = {
+  const customStampImages = {
     nadia: `${baseRepoUrl}stamp_nadia.png`,
     hiredScore: `${baseRepoUrl}stamp_hiredscore.png`,
     serviceNow: `${baseRepoUrl}stamp_servicenow.png`,
     workday: `${baseRepoUrl}stamp_workday.png`,
     yearEndChatbot: `${baseRepoUrl}stamp_YEbot.png`,
-    copilotM365: `${baseRepoUrl}stamp_copilot_o365.png`,
+    copilotM365: `${baseRepoUrl}stamp_copilot_o365.png`, // New consolidated Copilot stamp
     analystAgent: `${baseRepoUrl}stamp_copilot_analyst_agent.png`,
     researchAgent: `${baseRepoUrl}stamp_copilot_research_agent.png`,
     deloitteBooth: `${baseRepoUrl}stamp_deloitte.png`,
-    digitalPassportCreation: `${baseRepoUrl}stamp_digital_passport.png`,
+    digitalPassportCreation: `${baseRepoUrl}stamp_digital_passport.png`, // Renamed Fun Booth stamp
   };
 
   // Specific Booths for stamping (from Day 1 and Day 2)
   const boothOptions = [
-    { id: "nadia", name: "Nadia" },
-    { id: "hiredScore", name: "HiredScore" },
-    { id: "serviceNow", name: "ServiceNow" },
-    { id: "workday", name: "Workday" },
-    { id: "yearEndChatbot", name: "Year End Rewards Assistant" },
-    { id: "copilotM365", name: "Copilot for M365" },
-    { id: "analystAgent", name: "Copilot Analyst Agent" },
-    { id: "researchAgent", name: "Copilot Research Agent" },
-    { id: "deloitteBooth", name: "Deloitte" },
-    { id: "digitalPassportCreation", name: "Digital Passport Creation" },
+    { id: "nadia", name: "Nadia" }, // Removed suffix
+    { id: "hiredScore", name: "HiredScore" }, // Removed suffix
+    { id: "serviceNow", name: "ServiceNow" }, // Removed suffix
+    { id: "workday", name: "Workday" }, // Removed suffix
+    { id: "yearEndChatbot", name: "Year End Rewards Assistant" }, // Removed suffix
+    { id: "copilotM365", name: "Copilot for M365" }, // Consolidated Copilot
+    { id: "analystAgent", name: "Copilot Analyst Agent" }, // Renamed and removed suffix
+    { id: "researchAgent", name: "Copilot Research Agent" }, // Renamed and removed suffix
+    { id: "deloitteBooth", name: "Deloitte" }, // Removed suffix
+    { id: "digitalPassportCreation", name: "Digital Passport Creation" }, // Renamed Fun Booth
   ];
 
-  // Favorite Sessions/Activities from the agenda
+  // Favorite Sessions/Activities from the agenda (no change needed here as names are generic)
   const favoriteOptions = [
     {
       id: "externalSpeaker",
@@ -123,7 +98,7 @@ const App = () => {
       name: "Interactive Showcase: Upskilling in Action (Day 2)",
     },
     { id: "aiUseCases", name: "AI Use Case Pipeline" },
-    { id: "firesideChat", name: "AI in P&O Industry Insights" },
+    { id: "firesideChat", name: "Fireside Chat: AI in P&O Industry Insights" },
     {
       id: "governance",
       name: "Governance: Driving Responsible Innovation in P&O",
@@ -138,6 +113,7 @@ const App = () => {
   // Initialize Firebase and set up authentication
   useEffect(() => {
     try {
+      // Hardcode the Firebase configuration directly from your provided snippet
       const firebaseConfig = {
         apiKey: "AIzaSyDo3etrqLKSSzFMcExk-TOJD30MQm82Qo8",
         authDomain: "aimplify-iii-digital-passport.firebaseapp.com",
@@ -162,37 +138,31 @@ const App = () => {
         } else {
           setMessage("Signing in anonymously...");
           try {
+            // Always sign in anonymously in this deployment setup
             await signInAnonymously(firebaseAuth);
             setMessage("Signed in anonymously.");
-          } catch (error: unknown) { // Explicitly type error as unknown
+          } catch (error) {
             console.error("Error signing in:", error);
-            if (error instanceof Error) { // Type guard for Error instance
-              setMessage(
-                `Authentication error: ${error.message}. Please ensure Firebase Authentication is enabled AND 'Anonymous' sign-in method is enabled in your Firebase project console under Build -> Authentication.`
-              );
-            } else {
-              setMessage(`Authentication error: An unknown error occurred.`);
-            }
+            setMessage(
+              `Authentication error: ${error.message}. Please ensure Firebase Authentication is enabled AND 'Anonymous' sign-in method is enabled in your Firebase project console under Build -> Authentication.`
+            );
           }
         }
-        setIsAuthReady(true);
+        setIsAuthReady(true); // Auth is ready
       });
-    } catch (error: unknown) { // Explicitly type error as unknown
+    } catch (error) {
       console.error("Firebase initialization failed:", error);
-      if (error instanceof Error) { // Type guard for Error instance
-        setMessage(
-          `Firebase init error: ${error.message}. Please check your Firebase config.`
-        );
-      } else {
-        setMessage(`Firebase init error: An unknown error occurred.`);
-      }
-      setLoading(false);
+      setMessage(
+        `Firebase init error: ${error.message}. Please check your Firebase config.`
+      );
+      setLoading(false); // Set false if Firebase init itself fails
     }
   }, []);
 
   // Load passport data from Firestore when auth is ready and userId is set
   useEffect(() => {
-    const currentAppId = auth?.app?.options?.projectId || "default-app-id"; // Use optional chaining
+    // Robustly get projectId from the initialized auth app or fallback
+    const currentAppId = auth?.app?.options?.projectId || "default-app-id";
 
     if (isAuthReady && db && userId) {
       const userPassportRef = doc(
@@ -208,30 +178,29 @@ const App = () => {
             const data = docSnap.data();
             setUserName(data.userName || "");
             setUserRole(data.userRole || "");
-            setSelectedAvatar(data.selectedAvatar || avatarImages[0]);
+            setSelectedAvatar(data.selectedAvatar || avatarImages[0]); // Default to first avatar
             setFavoriteSessions(data.favoriteSessions || []);
-
-            const loadedStampedBooths: StampedBooths = data.stampedBooths || {};
-            const newStampedBooths: StampedBooths = { ...loadedStampedBooths };
-
-            // Migration logic for old copilot stamps
+            // Ensure old copilot stamps are mapped to new consolidated one on load
+            const loadedStampedBooths = data.stampedBooths || {};
+            const newStampedBooths = { ...loadedStampedBooths };
             if (
               loadedStampedBooths.copilotWord ||
               loadedStampedBooths.copilotPowerPoint ||
               loadedStampedBooths.copilotChat
             ) {
-              newStampedBooths.copilotM365 = true;
+              newStampedBooths.copilotM365 = true; // If any old copilot was stamped, new one is
               delete newStampedBooths.copilotWord;
               delete newStampedBooths.copilotPowerPoint;
               delete newStampedBooths.copilotChat;
             }
-            // Migration logic for funBooth
             if (loadedStampedBooths.funBooth) {
+              // Map funBooth to digitalPassportCreation
               newStampedBooths.digitalPassportCreation = true;
               delete newStampedBooths.funBooth;
             }
             setStampedBooths(newStampedBooths);
 
+            // Load new fields
             setFavoriteGenAITool(data.favoriteGenAITool || "");
             setKeyInsights(data.keyInsights || "");
             setMessage("Passport data loaded!");
@@ -239,27 +208,26 @@ const App = () => {
             setMessage("No passport data found, initializing new one.");
             setUserName("");
             setUserRole("");
-            setSelectedAvatar(avatarImages[0]);
+            setSelectedAvatar(avatarImages[0]); // Default to first avatar
             setFavoriteSessions([]);
             setStampedBooths({});
+            // Initialize new fields
             setFavoriteGenAITool("");
             setKeyInsights("");
           }
-          setIsPassportDataLoaded(true);
+          setIsPassportDataLoaded(true); // Passport data is loaded (or initialized)
         },
         (error) => {
           console.error("Error fetching passport data:", error);
-          if (error instanceof Error) {
-            setMessage(`Error loading passport: ${error.message}`);
-          } else {
-            setMessage(`Error loading passport: An unknown error occurred.`);
-          }
-          setIsPassportDataLoaded(true);
+          setMessage(`Error loading passport: ${error.message}`);
+          setIsPassportDataLoaded(true); // Even on error, we consider it "loaded" to stop spinner
         }
       );
 
-      return () => unsubscribe();
+      return () => unsubscribe(); // Clean up listener on unmount
     } else if (isAuthReady && !userId && !loading) {
+      // If auth is ready but no userId (e.g., anonymous sign-in failed, or not yet available from onAuthStateChanged)
+      // And we are not already in a loading state, we should proceed and not block
       setIsPassportDataLoaded(true);
       setMessage(
         "User ID not yet available for data loading. Will try again once authenticated."
@@ -285,7 +253,7 @@ const App = () => {
       };
       document.body.appendChild(script);
     } else {
-      setHtml2canvasLoaded(true);
+      setHtml2canvasLoaded(true); // Already loaded
     }
   }, []);
 
@@ -303,8 +271,10 @@ const App = () => {
       return;
     }
     try {
-      const stampedBoothsToSave: StampedBooths = { ...stampedBooths }; // Explicitly type
-
+      // Create a temporary object to map old IDs to new ones for saving
+      const stampedBoothsToSave = { ...stampedBooths };
+      // If the new consolidated copilot is stamped, mark old ones as unstamped for clean up if they exist
+      // This ensures we don't carry over old IDs if they were previously stamped.
       if (stampedBoothsToSave.copilotM365) {
         delete stampedBoothsToSave.copilotWord;
         delete stampedBoothsToSave.copilotPowerPoint;
@@ -314,12 +284,8 @@ const App = () => {
         delete stampedBoothsToSave.funBooth;
       }
 
-      const currentAppId = auth?.app?.options?.projectId; // Use optional chaining
-
-      if (!currentAppId) { // Add a check for currentAppId
-        setMessage("App ID is missing, cannot save passport data.");
-        return;
-      }
+      // Use currentAppId derived from firebaseConfig.projectId
+      const currentAppId = auth.app.options.projectId;
 
       await setDoc(
         doc(
@@ -332,20 +298,16 @@ const App = () => {
           userRole,
           selectedAvatar,
           favoriteSessions,
-          stampedBooths: stampedBoothsToSave,
+          stampedBooths: stampedBoothsToSave, // Save the cleaned object
           favoriteGenAITool,
           keyInsights,
           lastUpdated: new Date().toISOString(),
         },
         { merge: true }
       );
-    } catch (error: unknown) { // Explicitly type error as unknown
+    } catch (error) {
       console.error("Error saving passport data:", error);
-      if (error instanceof Error) {
-        setMessage(`Error saving passport: ${error.message}`);
-      } else {
-        setMessage(`Error saving passport: An unknown error occurred.`);
-      }
+      setMessage(`Error saving passport: ${error.message}`);
     }
   }, [
     db,
@@ -361,14 +323,14 @@ const App = () => {
   ]);
 
   // Handle changes to user input fields
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
+  const handleInputChange = (e, setter) => {
     setter(e.target.value);
   };
 
   // Handle favorite session selection
-  const handleFavoriteSessionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFavoriteSessionChange = (e) => {
     const { value, checked } = e.target;
-    setFavoriteSessions((prev: string[]) => { // Explicitly type prev as string[]
+    setFavoriteSessions((prev) => {
       if (checked) {
         return [...prev, value];
       } else {
@@ -378,15 +340,16 @@ const App = () => {
   };
 
   // Handle stamping a booth
-  const handleStampBooth = (boothId: string) => { // Explicitly type boothId as string
-    setStampedBooths((prev: StampedBooths) => ({ // Explicitly type prev as StampedBooths
+  const handleStampBooth = (boothId) => {
+    setStampedBooths((prev) => ({
       ...prev,
-      [boothId]: !prev[boothId],
+      [boothId]: !prev[boothId], // Toggle stamp status
     }));
   };
 
   // Function to download the passport as an image
   const handleDownloadPassport = async () => {
+    // Check if html2canvas is loaded before attempting to use it
     if (!html2canvasLoaded || typeof window.html2canvas === "undefined") {
       setMessage(
         "html2canvas library is not loaded. Please try again in a moment, or refresh."
@@ -400,9 +363,10 @@ const App = () => {
     setMessage("Generating passport image...");
     try {
       const canvas = await window.html2canvas(passportRef.current, {
-        useCORS: true,
+        // Use window.html2canvas
+        useCORS: true, // Important for loading external images (avatars, stamps)
         allowTaint: true,
-        backgroundColor: null,
+        backgroundColor: null, // Transparent background for PNG
       });
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -412,15 +376,11 @@ const App = () => {
       link.click();
       document.body.removeChild(link);
       setMessage("Passport downloaded successfully!");
-    } catch (error: unknown) { // Explicitly type error as unknown
+    } catch (error) {
       console.error("Error generating or downloading passport image:", error);
-      if (error instanceof Error) {
-        setMessage(
-          `Error downloading passport: ${error.message}. Make sure images are publicly accessible.`
-        );
-      } else {
-        setMessage(`Error downloading passport: An unknown error occurred.`);
-      }
+      setMessage(
+        `Error downloading passport: ${error.message}. Make sure images are publicly accessible.`
+      );
     }
   };
 
@@ -513,6 +473,7 @@ const App = () => {
           </div>
         )}
 
+        {/* Changed this div to always be a single column using space-y for vertical separation */}
         <div className="space-y-8">
           {/* Passport Details & Avatar Section */}
           <div
@@ -546,7 +507,8 @@ const App = () => {
                 style={{
                   borderColor: colors.mediumBlue,
                   color: colors.darkBlue,
-                }} // Removed focusRingColor
+                  focusRingColor: colors.redAccent,
+                }}
                 placeholder="Enter your name"
               />
             </div>
@@ -568,7 +530,8 @@ const App = () => {
                 style={{
                   borderColor: colors.mediumBlue,
                   color: colors.darkBlue,
-                }} // Removed focusRingColor
+                  focusRingColor: colors.redAccent,
+                }}
                 placeholder="e.g., P&O Business Partner"
               />
             </div>
@@ -586,23 +549,26 @@ const App = () => {
                   <button
                     key={index}
                     onClick={() => setSelectedAvatar(image)}
+                    // Added w-16 h-16 for explicit square size, overflow-hidden for proper clipping
+                    // Added flex, justify-center, items-center to center the image within the button
                     className={`w-16 h-16 p-1 rounded-full border-2 transition duration-300 ease-in-out transform hover:scale-110 overflow-hidden flex justify-center items-center
-                                 ${selectedAvatar === image ? "ring-2 ring-offset-2" : ""}`} // Add ring-offset for better visibility
+                                 ${selectedAvatar === image ? "ring-2" : ""}`}
                     style={{
                       borderColor:
                         selectedAvatar === image
                           ? colors.redAccent
                           : "transparent",
-                    }} // Removed ringColor
+                      ringColor: colors.redAccent,
+                    }}
                   >
                     <img
                       src={image}
                       alt={`Avatar ${index + 1}`}
+                      // Changed img styling to fill its parent and apply rounded-full
                       className="w-full h-full object-cover rounded-full"
-                      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { // Explicitly type e
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null;
-                        target.src =
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src =
                           "https://placehold.co/64x64/cccccc/000000?text=Err";
                       }}
                     />
@@ -629,7 +595,8 @@ const App = () => {
                 style={{
                   borderColor: colors.mediumBlue,
                   color: colors.darkBlue,
-                }} // Removed focusRingColor
+                  focusRingColor: colors.redAccent,
+                }}
                 placeholder="e.g., Gemini, ChatGPT, Microsoft Copilot, Midjourney"
               />
             </div>
@@ -646,13 +613,14 @@ const App = () => {
                 id="keyInsights"
                 value={keyInsights}
                 onChange={(e) => handleInputChange(e, setKeyInsights)}
-                rows={3} // Changed to number type
+                rows="3"
                 className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 transition duration-200 ease-in-out shadow-sm"
                 style={{
                   borderColor: colors.mediumBlue,
                   color: colors.darkBlue,
+                  focusRingColor: colors.redAccent,
                   resize: "vertical",
-                }} // Removed focusRingColor
+                }}
                 placeholder="Share your key takeaways..."
               ></textarea>
             </div>
@@ -725,7 +693,8 @@ const App = () => {
                       style={{
                         color: colors.redAccent,
                         accentColor: colors.redAccent,
-                      }} // Removed focusRingColor
+                        focusRingColor: colors.yellowAccent,
+                      }}
                     />
                     <span
                       className="ml-2 text-md font-medium"
@@ -781,27 +750,28 @@ const App = () => {
                     className={`flex items-center justify-center rounded-full font-bold text-sm transition duration-300 ease-in-out transform hover:scale-105`}
                     style={{
                       width: "40px",
-                      height: "40px",
-                      backgroundColor: (stampedBooths[booth.id] as boolean | undefined) // Assert as boolean | undefined
+                      height: "40px", // Explicit size for button
+                      backgroundColor: stampedBooths[booth.id]
                         ? colors.yellowAccent
                         : colors.redAccent,
-                      color: "#ffffff",
+                      color: "#ffffff", // Icon color
                     }}
                   >
-                    {stampedBooths[booth.id] && customStampImages[booth.id] ? ( // Check if both stamped and image exists
+                    {stampedBooths[booth.id] ? (
+                      // Display custom stamp image if available, otherwise fallback to checkmark
+                      customStampImages[booth.id] ? (
                         <img
-                          src={customStampImages[booth.id]} // Directly use the string URL
+                          src={customStampImages[booth.id]}
                           alt={`${booth.name} Stamp`}
                           style={{
                             width: "40px",
                             height: "40px",
                             objectFit: "cover",
                             borderRadius: "50%",
-                          }}
-                          onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { // Explicitly type e
-                            const target = e.target as HTMLImageElement;
-                            target.onerror = null;
-                            target.src =
+                          }} // Explicit size for image
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src =
                               "https://placehold.co/40x40/cccccc/000000?text=✓";
                           }}
                         />
@@ -824,7 +794,28 @@ const App = () => {
                             d="M5 13l4 4L19 7"
                           ></path>
                         </svg>
-                      )}
+                      )
+                    ) : (
+                      // Plus icon when not stamped
+                      <svg
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          color: "#ffffff",
+                        }}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 4v16m-8-8h16"
+                        ></path>
+                      </svg>
+                    )}
                   </button>
                 </div>
               ))}
@@ -856,17 +847,18 @@ const App = () => {
             </h2>
             <div className="flex flex-col items-center mb-6">
               <div
+                // Added w-72 h-72 for explicit square size matching img, and overflow-hidden for clipping
                 className="p-2 bg-white rounded-full shadow-lg border animate-bounce-slow w-72 h-72 overflow-hidden flex justify-center items-center"
                 style={{ borderColor: colors.redAccent }}
               >
                 <img
                   src={selectedAvatar}
                   alt="Your Avatar"
+                  // Changed img styling to fill its parent and apply rounded-full
                   className="w-full h-full object-cover rounded-full"
-                  onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { // Explicitly type e
-                    const target = e.target as HTMLImageElement;
-                    target.onerror = null;
-                    target.src =
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src =
                       "https://placehold.co/144x144/cccccc/000000?text=Err";
                   }}
                 />
@@ -893,25 +885,41 @@ const App = () => {
                 }}
               >
                 <p
-                  className="font-bold text-lg mb-2"
+                  className="font-bold text-lg mb-2" // Ensured bold and distinct size
                   style={{ color: colors.darkBlue }}
                 >
                   Passport Details:
                 </p>
+                {/* Custom list items for consistent alignment */}
                 <div style={{ paddingLeft: "20px", textIndent: "-20px" }}>
+                  {" "}
+                  {/* Adjust these values for alignment */}
                   <p style={{ display: "flex", alignItems: "flex-start" }}>
                     <span
                       style={{
-                        marginRight: "16px",
+                        marginRight: "16px", // Increased spacing for bullets
                         fontSize: "1.25rem",
                         lineHeight: "1",
                       }}
                     >
                       •
                     </span>
-                    <span style={{ fontWeight: "bold", fontFamily: "'Roboto Slab', serif" }}>
+                    <span
+                      style={{
+                        fontWeight: "bold",
+                        fontFamily: "'Roboto Slab', serif",
+                      }}
+                    >
+                      {" "}
+                      {/* Made label bold and applied font */}
                       Issued On:{" "}
-                      <span style={{ color: colors.darkBlue, fontWeight: "normal", fontFamily: "sans-serif" }}>
+                      <span
+                        style={{
+                          color: colors.darkBlue,
+                          fontWeight: "normal",
+                          fontFamily: "sans-serif",
+                        }}
+                      >
                         {passportIssuedDate}
                       </span>
                     </span>
@@ -919,16 +927,29 @@ const App = () => {
                   <p style={{ display: "flex", alignItems: "flex-start" }}>
                     <span
                       style={{
-                        marginRight: "16px",
+                        marginRight: "16px", // Increased spacing for bullets
                         fontSize: "1.25rem",
                         lineHeight: "1",
                       }}
                     >
                       •
                     </span>
-                    <span style={{ fontWeight: "bold", fontFamily: "'Roboto Slab', serif" }}>
+                    <span
+                      style={{
+                        fontWeight: "bold",
+                        fontFamily: "'Roboto Slab', serif",
+                      }}
+                    >
+                      {" "}
+                      {/* Made label bold and applied font */}
                       Place:{" "}
-                      <span style={{ color: colors.darkBlue, fontWeight: "normal", fontFamily: "sans-serif" }}>
+                      <span
+                        style={{
+                          color: colors.darkBlue,
+                          fontWeight: "normal",
+                          fontFamily: "sans-serif",
+                        }}
+                      >
                         {passportPlace}
                       </span>
                     </span>
@@ -936,16 +957,29 @@ const App = () => {
                   <p style={{ display: "flex", alignItems: "flex-start" }}>
                     <span
                       style={{
-                        marginRight: "16px",
+                        marginRight: "16px", // Increased spacing for bullets
                         fontSize: "1.25rem",
                         lineHeight: "1",
                       }}
                     >
                       •
                     </span>
-                    <span style={{ fontWeight: "bold", fontFamily: "'Roboto Slab', serif" }}>
+                    <span
+                      style={{
+                        fontWeight: "bold",
+                        fontFamily: "'Roboto Slab', serif",
+                      }}
+                    >
+                      {" "}
+                      {/* Made label bold and applied font */}
                       Valid Until:{" "}
-                      <span style={{ color: colors.darkBlue, fontWeight: "normal", fontFamily: "sans-serif" }}>
+                      <span
+                        style={{
+                          color: colors.darkBlue,
+                          fontWeight: "normal",
+                          fontFamily: "sans-serif",
+                        }}
+                      >
                         {passportValidUntil}
                       </span>
                     </span>
@@ -962,16 +996,29 @@ const App = () => {
                     <p style={{ display: "flex", alignItems: "flex-start" }}>
                       <span
                         style={{
-                          marginRight: "16px",
+                          marginRight: "16px", // Increased spacing
                           fontSize: "1.25rem",
                           lineHeight: "1",
                         }}
                       >
                         •
                       </span>
-                      <span style={{ fontWeight: "bold", fontFamily: "'Roboto Slab', serif" }}>
+                      <span
+                        style={{
+                          fontWeight: "bold",
+                          fontFamily: "'Roboto Slab', serif",
+                        }}
+                      >
+                        {" "}
+                        {/* Made label bold and applied font */}
                         My Favorite Gen AI Tool:{" "}
-                        <span style={{ color: colors.mediumBlue, fontWeight: "normal", fontFamily: "sans-serif" }}>
+                        <span
+                          style={{
+                            color: colors.mediumBlue,
+                            fontWeight: "normal",
+                            fontFamily: "sans-serif",
+                          }}
+                        >
                           {favoriteGenAITool}
                         </span>
                       </span>
@@ -989,16 +1036,29 @@ const App = () => {
                     <p style={{ display: "flex", alignItems: "flex-start" }}>
                       <span
                         style={{
-                          marginRight: "16px",
+                          marginRight: "16px", // Increased spacing
                           fontSize: "1.25rem",
                           lineHeight: "1",
                         }}
                       >
                         •
                       </span>
-                      <span style={{ fontWeight: "bold", fontFamily: "'Roboto Slab', serif" }}>
+                      <span
+                        style={{
+                          fontWeight: "bold",
+                          fontFamily: "'Roboto Slab', serif",
+                        }}
+                      >
+                        {" "}
+                        {/* Made label bold and applied font */}
                         My Key Insights from AImplify III:{" "}
-                        <span style={{ color: colors.mediumBlue, fontWeight: "normal", fontFamily: "sans-serif" }}>
+                        <span
+                          style={{
+                            color: colors.mediumBlue,
+                            fontWeight: "normal",
+                            fontFamily: "sans-serif",
+                          }}
+                        >
                           {keyInsights}
                         </span>
                       </span>
@@ -1011,12 +1071,12 @@ const App = () => {
               <div
                 className="p-4 rounded-lg shadow-sm border"
                 style={{
-                  backgroundColor: colors.lightRedBg,
+                  backgroundColor: colors.lightRedBg, // Different background for contrast
                   borderColor: colors.redAccent,
                 }}
               >
                 <p
-                  className="font-bold text-lg mb-2"
+                  className="font-bold text-lg mb-2" // Ensured bold and distinct size
                   style={{ color: colors.darkBlue }}
                 >
                   Your Favorite Sessions:
@@ -1030,7 +1090,7 @@ const App = () => {
                       >
                         <span
                           style={{
-                            marginRight: "16px",
+                            marginRight: "16px", // Increased spacing
                             fontSize: "1.25rem",
                             lineHeight: "1",
                           }}
@@ -1054,12 +1114,12 @@ const App = () => {
               <div
                 className="p-4 rounded-lg shadow-sm border"
                 style={{
-                  backgroundColor: colors.lightBlueBg,
+                  backgroundColor: colors.lightBlueBg, // Consistent background
                   borderColor: colors.mediumBlue,
                 }}
               >
                 <p
-                  className="font-bold text-lg mb-3"
+                  className="font-bold text-lg mb-3" // Ensured bold and distinct size
                   style={{ color: colors.darkBlue }}
                 >
                   Your Booth Stamps:
@@ -1072,38 +1132,38 @@ const App = () => {
                         key={booth.id}
                         className={`p-0.5 rounded-xl flex flex-col items-center justify-center transition-all duration-300 shadow-md`}
                         style={{
-                          backgroundColor: "#ffffff",
+                          backgroundColor: "#ffffff", // White background for stamp box
                           width: "100%",
                           maxWidth: "120px",
                           aspectRatio: "1 / 1",
-                          borderColor: colors.mediumBlue,
+                          borderColor: colors.mediumBlue, // Border for stamp box
                           borderWidth: "1px",
                         }}
                       >
-                        {stampedBooths[booth.id] && customStampImages[booth.id] ? ( // Check if both stamped and image exists
-                            <img
-                              src={customStampImages[booth.id]} // Directly use the string URL
-                              alt={`${booth.name} Stamp`}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                                borderRadius: "50%",
-                              }}
-                              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { // Explicitly type e
-                                const target = e.target as HTMLImageElement;
-                                target.onerror = null;
-                                target.src =
-                                  "https://placehold.co/80x80/cccccc/000000?text=✓";
-                              }}
-                            />
-                          ) : (
-                            <span
-                              style={{ fontSize: "4rem", color: colors.darkBlue }}
-                            >
-                              ✅
-                            </span>
-                          )}
+                        {customStampImages[booth.id] ? (
+                          <img
+                            src={customStampImages[booth.id]}
+                            alt={`${booth.name} Stamp`}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "contain",
+                              padding: "2px",
+                              borderRadius: "50%",
+                            }}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://placehold.co/80x80/cccccc/000000?text=✓";
+                            }}
+                          />
+                        ) : (
+                          <span
+                            style={{ fontSize: "4rem", color: colors.darkBlue }}
+                          >
+                            ✅
+                          </span>
+                        )}
                       </div>
                     ))}
                 </div>
@@ -1135,6 +1195,7 @@ const App = () => {
               style={{
                 backgroundColor: colors.redAccent,
                 color: "#ffffff",
+                hoverBackgroundColor: colors.mediumBlue,
               }}
             >
               <svg

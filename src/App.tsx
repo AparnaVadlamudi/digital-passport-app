@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously, Auth } from "firebase/auth"; // Import Auth type
+import { getAuth, signInAnonymously, onAuthStateChanged, Auth } from "firebase/auth"; // Import Auth type and onAuthStateChanged
 import { getFirestore, doc, setDoc, onSnapshot, Firestore } from "firebase/firestore"; // Import Firestore type
 
 // Declare html2canvas on the Window object for TypeScript
@@ -10,25 +10,25 @@ declare global {
   }
 }
 
-// Define interface for stampedBooths to resolve TypeScript errors
+// Define interface for stampedBooths (only for tracking boolean status)
 interface StampedBooths {
   [key: string]: boolean | undefined; // Allow string keys, and their values can be boolean or undefined
-  nadia?: boolean;
-  hiredScore?: boolean;
-  serviceNow?: boolean;
-  workday?: boolean;
-  yearEndChatbot?: boolean;
-  copilotM365?: boolean;
-  analystAgent?: boolean;
-  researchAgent?: boolean;
-  deloitteBooth?: boolean;
-  digitalPassportCreation?: boolean;
-  copilotWord?: boolean; // Keep for migration logic
-  copilotPowerPoint?: boolean; // Keep for migration logic
-  copilotChat?: boolean; // Keep for migration logic
-  funBooth?: boolean; // Keep for migration logic
 }
 
+// Define interface for customStampImages (which hold URLs, not booleans)
+interface CustomStampImageMap {
+  [key: string]: string | undefined; // Keys are booth IDs, values are string URLs
+  nadia: string;
+  hiredScore: string;
+  serviceNow: string;
+  workday: string;
+  yearEndChatbot: string;
+  copilotM365: string;
+  analystAgent: string;
+  researchAgent: string;
+  deloitteBooth: string;
+  digitalPassportCreation: string;
+}
 
 const App = () => {
   // Firebase state variables with explicit types
@@ -80,7 +80,8 @@ const App = () => {
   );
 
   // --- Stamp image URLs ---
-  const customStampImages: StampedBooths = { // Assert type for customStampImages
+  // Now correctly typed as CustomStampImageMap, containing string URLs
+  const customStampImages: CustomStampImageMap = {
     nadia: `${baseRepoUrl}stamp_nadia.png`,
     hiredScore: `${baseRepoUrl}stamp_hiredscore.png`,
     serviceNow: `${baseRepoUrl}stamp_servicenow.png`,
@@ -787,10 +788,9 @@ const App = () => {
                       color: "#ffffff",
                     }}
                   >
-                    {(stampedBooths[booth.id] as boolean | undefined) ? ( // Assert as boolean | undefined
-                      (customStampImages[booth.id] as string | undefined) ? ( // Assert as string | undefined
+                    {stampedBooths[booth.id] && customStampImages[booth.id] ? ( // Check if both stamped and image exists
                         <img
-                          src={customStampImages[booth.id] as string} // Assert as string
+                          src={customStampImages[booth.id]} // Directly use the string URL
                           alt={`${booth.name} Stamp`}
                           style={{
                             width: "40px",
@@ -824,27 +824,7 @@ const App = () => {
                             d="M5 13l4 4L19 7"
                           ></path>
                         </svg>
-                      )
-                    ) : (
-                      <svg
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          color: "#ffffff",
-                        }}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M12 4v16m-8-8h16"
-                        ></path>
-                      </svg>
-                    )}
+                      )}
                   </button>
                 </div>
               ))}
@@ -1100,31 +1080,30 @@ const App = () => {
                           borderWidth: "1px",
                         }}
                       >
-                        {(customStampImages[booth.id] as string | undefined) ? ( // Explicitly assert type
-                          <img
-                            src={customStampImages[booth.id] as string} // Explicitly assert type
-                            alt={`${booth.name} Stamp`}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "contain",
-                              padding: "2px",
-                              borderRadius: "50%",
-                            }}
-                            onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { // Explicitly type e
-                              const target = e.target as HTMLImageElement;
-                              target.onerror = null;
-                              target.src =
-                                "https://placehold.co/80x80/cccccc/000000?text=✓";
-                            }}
-                          />
-                        ) : (
-                          <span
-                            style={{ fontSize: "4rem", color: colors.darkBlue }}
-                          >
-                            ✅
-                          </span>
-                        )}
+                        {stampedBooths[booth.id] && customStampImages[booth.id] ? ( // Check if both stamped and image exists
+                            <img
+                              src={customStampImages[booth.id]} // Directly use the string URL
+                              alt={`${booth.name} Stamp`}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                borderRadius: "50%",
+                              }}
+                              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { // Explicitly type e
+                                const target = e.target as HTMLImageElement;
+                                target.onerror = null;
+                                target.src =
+                                  "https://placehold.co/80x80/cccccc/000000?text=✓";
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{ fontSize: "4rem", color: colors.darkBlue }}
+                            >
+                              ✅
+                            </span>
+                          )}
                       </div>
                     ))}
                 </div>
@@ -1156,7 +1135,6 @@ const App = () => {
               style={{
                 backgroundColor: colors.redAccent,
                 color: "#ffffff",
-                // Removed hoverBackgroundColor from here as it's not a standard CSS property for 'style'
               }}
             >
               <svg

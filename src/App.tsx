@@ -852,7 +852,7 @@ const App = () => {
               className="text-3xl font-bold text-center mb-6"
               style={{ color: colors.darkBlue }}
             >
-              Your AImpligy III digital passport
+              Your AImplify III digital passport
             </h2>
             <div className="flex flex-col items-center mb-6">
               <div
